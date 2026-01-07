@@ -1,5 +1,7 @@
+#ifndef GLOBALCONF_H
+#define GLOBALCONF_H
+
 #include "includes.h" 
-#include <cstdint>
 typedef struct GlobalConf_s {
 
   uint16_t config_version;
@@ -17,3 +19,5 @@ typedef struct GlobalConf_s {
   uint32_t key_derivation_iters;  
   uint32_t password_hashing_iters;
 }GlobalConf_t ;
+extern GlobalConf_t *globalconf;
+#endif /* ifdef GLOBALCONF_H */

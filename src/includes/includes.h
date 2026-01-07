@@ -20,8 +20,10 @@
 
 #include "errorhandling.h"
 #include "CLL.h"
-#include "encryption.h"
 #include "global.h"
+#include "globalconfig.h"
+#include "encryption.h"
 #include "usersconfig.h"
+#include "user.h"
 
 #endif // !INCLUDES_H

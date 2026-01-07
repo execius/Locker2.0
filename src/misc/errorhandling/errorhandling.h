@@ -40,7 +40,9 @@ enum ERROR_ErrorCodes {
   ERROR_GLOBALCTX_DOUBLEINIT= -204,
   ERROR_INVALID_ERROR =-201,
   ERROR_LOGERROR=-202,
-  ERROR_ERRORSTRUCT_INIT = -203
+  ERROR_ERRORSTRUCT_INIT = -203,
+  LOCKER_ERROR_STRING_LENGHT_ABOVE_MAX= -300,
+  ERROR_STDLIB_FAILURE = -301
 };
 
 /*expects a non null [errstct] ideally you'd 
@@ -90,10 +92,13 @@ do {\
 } while (0)
 
 /*like ERROR_CHECK_SUCCESS_RET but logs*/
-#define ERROR_CHECK_SUCCESS_LOG(exp,successcode,errcode,errstct) \
+#define ERROR_CHECK_SUCCESS_LOG(exp,successcode,errcode,desc) \
 do {\
   if(successcode != (exp)){\
+    ErrorStruct_t *errstct;\
+    Error_InitErrorStruct(&errstct,errcode,__LINE__,__func__,__FILE__,desc);\
     Error_LogError(errstct);\
+    Error_DestroyErrorStruct(errstct);\
     return errcode;\
   }\
 } while (0)
@@ -107,10 +112,13 @@ do {\
 } while (0)
 
 /*like ERROR_CHECK_NULL_RET but logs*/
-#define ERROR_CHECK_NULL_LOG(ptr,retval,errstct) \
+#define ERROR_CHECK_NULL_LOG(ptr,retval,desc) \
 do {\
   if(NULL == (ptr)){\
+    ErrorStruct_t *errstct;\
+    Error_InitErrorStruct(&errstct,retval,__LINE__,__func__,__FILE__,desc);\
     Error_LogError(errstct);\
+    Error_DestroyErrorStruct(errstct);\
     return retval;\
   }\
 } while (0)
@@ -126,11 +134,14 @@ do {\
 } while (0)
 
 /*like MALLOC_CHECK_NULL_RET but logs*/
-#define MALLOC_CHECK_NULL_LOG(ptr,size,MemAllocError,errstct) \
+#define MALLOC_CHECK_NULL_LOG(ptr,size,MemAllocError,desc) \
 do {\
   ptr = malloc(size);\
   if(NULL == ptr){\
+    ErrorStruct_t *errstct;\
+    Error_InitErrorStruct(&errstct,MemAllocError,__LINE__,__func__,__FILE__,desc);\
     Error_LogError(errstct);\
+    Error_DestroyErrorStruct(errstct)\
     return MemAllocError;\
   }\
 } while (0)

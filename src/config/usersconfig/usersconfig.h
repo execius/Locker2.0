@@ -1,5 +1,5 @@
-#ifndef USRCONF
-#define USRCONF
+#ifndef USRCONF_H
+#define USRCONF_H
 #include "includes.h"
 
 typedef struct UserConfig_s {
