@@ -95,8 +95,8 @@ SELECT \
     note_cipher,\
     username_hash,\
     platform_hash,\
-    email_hash\
-    id,\
+    email_hash,\
+    id\
 FROM credentials \
 WHERE id = ?;";
 #endif /* ifndef MACRO */

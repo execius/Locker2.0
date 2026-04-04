@@ -764,7 +764,7 @@ int fetch_account(sqlite3 *userdb,
   ERROR_CHECK_NULL_LOG(platform_cipher,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   ERROR_CHECK_NULL_LOG(note_cipher,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   ERROR_CHECK_NULL_LOG(platform_hash,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
-  ERROR_CHECK_NULL_LOG(username_cipher,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(username_hash,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   ERROR_CHECK_NULL_LOG(email_hash,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   int rc = 0;
   ByteBuff_t *username_cipher_serialized_bb = NULL,
@@ -820,71 +820,71 @@ int fetch_account(sqlite3 *userdb,
 
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
     (sqlite3_step(stmt)),
-    SQLITE_DONE,
+    SQLITE_ROW,
     ERROR_SQLITE_FAILURE,
     "failed to step stmt",
     rc,cleanup);
 
   ERROR_CHECK_NULL_SET_RC_GOTO(
-      (username_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 1)),
+      (username_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 0)),
       
       ERROR_SQLITE_FAILURE,
       "failed to get username_cipher from db",
       rc,cleanup);
-      username_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 1);
+      username_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 0);
   ERROR_CHECK_NULL_SET_RC_GOTO(
-      (email_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 2)),
+      (email_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 1)),
       
       ERROR_SQLITE_FAILURE,
       "failed to get email_cipher from db",
       rc,cleanup);
-      email_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 2);
+      email_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 1);
   ERROR_CHECK_NULL_SET_RC_GOTO(
-      (password_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 3)),
+      (password_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt,2)),
       
       ERROR_SQLITE_FAILURE,
       "failed to get password_cipher from db",
       rc,cleanup);
-      password_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 3);
+      password_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt,2);
   ERROR_CHECK_NULL_SET_RC_GOTO(
-      (platform_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 4)),
+      (platform_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 3)),
       
       ERROR_SQLITE_FAILURE,
       "failed to get platform_cipher from db",
       rc,cleanup);
-      platform_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 4);
+      platform_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 3);
   ERROR_CHECK_NULL_SET_RC_GOTO(
-      (note_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 5)),
+      (note_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 4)),
       
       ERROR_SQLITE_FAILURE,
       "failed to get note_cipher from db",
       rc,cleanup);
-      note_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 5);
+      note_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 4);
     ERROR_CHECK_NULL_SET_RC_GOTO(
-      (username_hash_serialized_bb_serialized = sqlite3_column_blob(stmt, 6)),
+      (username_hash_serialized_bb_serialized = sqlite3_column_blob(stmt, 5)),
       
       ERROR_SQLITE_FAILURE,
       "failed to get username_hash from db",
       rc,cleanup);
-      username_hash_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 6);
+      username_hash_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 5);
     ERROR_CHECK_NULL_SET_RC_GOTO(
-      (platform_hash_serialized_bb_serialized = sqlite3_column_blob(stmt, 7)),
+      (platform_hash_serialized_bb_serialized = sqlite3_column_blob(stmt, 6)),
       
       ERROR_SQLITE_FAILURE,
       "failed to get platform_hash from db",
       rc,cleanup);
-      platform_hash_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 7);
+      platform_hash_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 6);
 
     ERROR_CHECK_NULL_SET_RC_GOTO(
-      (email_hash_serialized_bb_serialized = sqlite3_column_blob(stmt, 8)),
+      (email_hash_serialized_bb_serialized = sqlite3_column_blob(stmt, 7)),
       
       ERROR_SQLITE_FAILURE,
       "failed to get email_hash from db",
       rc,cleanup);
-      email_hash_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 8);
+      email_hash_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 7);
 
 
-      *acc_id = sqlite3_column_int64(stmt, 9);
+      *acc_id = sqlite3_column_int64(stmt, 8);
 
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (DeserializeByteBuff(&username_cipher_serialized_bb
