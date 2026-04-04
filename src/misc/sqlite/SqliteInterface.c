@@ -744,3 +744,290 @@ cleanup:
   }
   return rc;
 }
+
+int fetch_account(sqlite3 *userdb,
+    uint64_t id,
+    EncryptionField_t **username_cipher,
+    EncryptionField_t **email_cipher,
+    EncryptionField_t **password_cipher,
+    EncryptionField_t **platform_cipher,
+    EncryptionField_t **note_cipher,
+    HashingField_t **username_hash,
+    HashingField_t **platform_hash,
+    HashingField_t **email_hash,
+    uint64_t *acc_id)
+{
+  ERROR_CHECK_NULL_LOG(userdb,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(username_cipher,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(email_cipher,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(password_cipher,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(platform_cipher,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(note_cipher,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(platform_hash,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(username_cipher,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(email_hash,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  int rc = 0;
+  ByteBuff_t *username_cipher_serialized_bb = NULL,
+                *email_cipher_serialized_bb = NULL,
+                *password_cipher_serialized_bb = NULL,
+                *platform_cipher_serialized_bb = NULL,
+                *note_cipher_serialized_bb = NULL,
+                *username_hash_serialized_bb = NULL,
+                *email_hash_serialized_bb = NULL,
+                *platform_hash_serialized_bb = NULL;
+
+  const unsigned char *username_cipher_serialized_bb_serialized = NULL,
+                *email_cipher_serialized_bb_serialized = NULL,
+                *password_cipher_serialized_bb_serialized = NULL,
+                *platform_cipher_serialized_bb_serialized = NULL,
+                *note_cipher_serialized_bb_serialized = NULL,
+                *username_hash_serialized_bb_serialized = NULL,
+                *email_hash_serialized_bb_serialized = NULL,
+                *platform_hash_serialized_bb_serialized = NULL;
+
+  size_t  username_cipher_serialized_bb_serialized_length = 0,
+          email_cipher_serialized_bb_serialized_length = 0,
+          password_cipher_serialized_bb_serialized_length = 0,
+          platform_cipher_serialized_bb_serialized_length = 0,
+          note_cipher_serialized_bb_serialized_length = 0,
+          username_hash_serialized_bb_serialized_length = 0,
+          email_hash_serialized_bb_serialized_length = 0,
+          platform_hash_serialized_bb_serialized_length = 0;
+
+  sqlite3_stmt *stmt;
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (sqlite3_prepare_v2(userdb
+                        ,get_account_by_id_sql
+                        ,-1
+                        ,&stmt
+                        ,NULL)
+     ),
+     SQLITE_OK,
+     ERROR_SQLITE_FAILURE,
+     "filed to preapare stmt",
+     rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (sqlite3_bind_int64(stmt,
+                       1,
+                       id)
+    ),
+     SQLITE_OK,
+     ERROR_SQLITE_FAILURE,
+     "failed to bind username_cipher_serialized_bb_serialized to sql stmt",
+     rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (sqlite3_step(stmt)),
+    SQLITE_DONE,
+    ERROR_SQLITE_FAILURE,
+    "failed to step stmt",
+    rc,cleanup);
+
+  ERROR_CHECK_NULL_SET_RC_GOTO(
+      (username_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 1)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get username_cipher from db",
+      rc,cleanup);
+      username_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 1);
+  ERROR_CHECK_NULL_SET_RC_GOTO(
+      (email_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 2)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get email_cipher from db",
+      rc,cleanup);
+      email_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 2);
+  ERROR_CHECK_NULL_SET_RC_GOTO(
+      (password_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 3)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get password_cipher from db",
+      rc,cleanup);
+      password_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 3);
+  ERROR_CHECK_NULL_SET_RC_GOTO(
+      (platform_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 4)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get platform_cipher from db",
+      rc,cleanup);
+      platform_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 4);
+  ERROR_CHECK_NULL_SET_RC_GOTO(
+      (note_cipher_serialized_bb_serialized = sqlite3_column_blob(stmt, 5)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get note_cipher from db",
+      rc,cleanup);
+      note_cipher_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 5);
+    ERROR_CHECK_NULL_SET_RC_GOTO(
+      (username_hash_serialized_bb_serialized = sqlite3_column_blob(stmt, 6)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get username_hash from db",
+      rc,cleanup);
+      username_hash_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 6);
+    ERROR_CHECK_NULL_SET_RC_GOTO(
+      (platform_hash_serialized_bb_serialized = sqlite3_column_blob(stmt, 7)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get platform_hash from db",
+      rc,cleanup);
+      platform_hash_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 7);
+
+    ERROR_CHECK_NULL_SET_RC_GOTO(
+      (email_hash_serialized_bb_serialized = sqlite3_column_blob(stmt, 8)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get email_hash from db",
+      rc,cleanup);
+      email_hash_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 8);
+
+
+      *acc_id = sqlite3_column_int64(stmt, 9);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeByteBuff(&username_cipher_serialized_bb
+                         ,username_cipher_serialized_bb_serialized
+                         ,username_cipher_serialized_bb_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to deserialize username_cipher_serialized_bb",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeByteBuff(&password_cipher_serialized_bb
+                         ,password_cipher_serialized_bb_serialized
+                         ,password_cipher_serialized_bb_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to deserialize password_cipher_serialized_bb",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeByteBuff(&email_cipher_serialized_bb
+                         ,email_cipher_serialized_bb_serialized
+                         ,email_cipher_serialized_bb_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to deserialize email_cipher_serialized_bb",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeByteBuff(&platform_cipher_serialized_bb
+                         ,platform_cipher_serialized_bb_serialized
+                         ,platform_cipher_serialized_bb_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to deserialize platform_cipher_serialized_bb",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeByteBuff(&note_cipher_serialized_bb
+                         ,note_cipher_serialized_bb_serialized
+                         ,note_cipher_serialized_bb_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to deserialize note_cipher_serialized_bb",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeByteBuff(&username_hash_serialized_bb
+                         ,username_hash_serialized_bb_serialized
+                         ,username_hash_serialized_bb_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to deserialize username_hash_serialized_bb",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeByteBuff(&platform_hash_serialized_bb
+                         ,platform_hash_serialized_bb_serialized
+                         ,platform_hash_serialized_bb_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to deserialize platform_hash_serialized_bb",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeByteBuff(&email_hash_serialized_bb
+                         ,email_hash_serialized_bb_serialized
+                         ,email_hash_serialized_bb_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to deserialize email_hash_serialized_bb",
+      rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeEncryptionField(username_cipher
+                         ,username_cipher_serialized_bb)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZEENCRYPTIONFIELD_FAILURE,
+      "failed to deserialize username_cipher",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeEncryptionField(email_cipher
+                         ,email_cipher_serialized_bb)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZEENCRYPTIONFIELD_FAILURE,
+      "failed to deserialize email_cipher",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeEncryptionField(password_cipher
+                         ,password_cipher_serialized_bb)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZEENCRYPTIONFIELD_FAILURE,
+      "failed to deserialize password_cipher",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeEncryptionField(platform_cipher
+                         ,platform_cipher_serialized_bb)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZEENCRYPTIONFIELD_FAILURE,
+      "failed to deserialize platform_cipher",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeEncryptionField(note_cipher
+                         ,note_cipher_serialized_bb)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZEENCRYPTIONFIELD_FAILURE,
+      "failed to deserialize note_cipher",
+      rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeHashingField(username_hash
+                         ,username_hash_serialized_bb)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZEHASHINGFIELD_FAILURE,
+      "failed to deserialize username_hash",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeHashingField(email_hash
+                         ,email_hash_serialized_bb)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZEHASHINGFIELD_FAILURE,
+      "failed to deserialize email_hash",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeHashingField(platform_hash
+                         ,platform_hash_serialized_bb)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZEHASHINGFIELD_FAILURE,
+      "failed to deserialize platform_hash",
+      rc,cleanup);
+  rc = ERROR_SUCCESS;
+  goto cleanup;
+cleanup:
+   sqlite3_finalize(stmt);
+  if (username_cipher_serialized_bb) 
+    DestroyByteBuff_Secure(username_cipher_serialized_bb);
+  if (email_cipher_serialized_bb) 
+    DestroyByteBuff_Secure(email_cipher_serialized_bb);
+  if (password_cipher_serialized_bb) 
+    DestroyByteBuff_Secure(password_cipher_serialized_bb);
+  if (platform_cipher_serialized_bb) 
+    DestroyByteBuff_Secure(platform_cipher_serialized_bb);
+  if (note_cipher_serialized_bb) 
+    DestroyByteBuff_Secure(note_cipher_serialized_bb);
+  if (username_hash_serialized_bb) 
+    DestroyByteBuff_Secure(username_hash_serialized_bb);
+  if (email_hash_serialized_bb) 
+    DestroyByteBuff_Secure(email_hash_serialized_bb);
+  if (platform_hash_serialized_bb) 
+    DestroyByteBuff_Secure(platform_hash_serialized_bb);
+
+  return rc;
+}

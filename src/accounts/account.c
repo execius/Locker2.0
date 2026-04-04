@@ -2,6 +2,7 @@
 
 typedef struct EncryptedAccount_s {
 
+  uint64_t id;
   EncryptionField_t *username_cipher;
   EncryptionField_t *email_cipher;
   EncryptionField_t *password_cipher;
@@ -17,6 +18,7 @@ typedef struct EncryptedAccount_s {
 } EncryptedAccount_t;
 
 typedef struct Account_s {
+  uint64_t id;
   ByteBuff_t *username;
   ByteBuff_t *email;
   ByteBuff_t *password;
@@ -595,6 +597,7 @@ ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
     "failed to initialize encrypted account",
     rc,cleanup);
 
+  (*eac)->id = account->id;
   rc = ERROR_SUCCESS;
   goto cleanup;
 
@@ -632,6 +635,7 @@ int DecryptAccount(EncryptedAccount_t *eac
   ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
 
   *account = NULL;
+
 
   const EVP_CIPHER *type = NULL;
   int rc = 0;
@@ -789,6 +793,7 @@ int DecryptAccount(EncryptedAccount_t *eac
     "failed to initialize encrypted account",
     rc,cleanup);
 
+  (*account)->id = eac->id;
   rc = ERROR_SUCCESS;
   goto cleanup;
 

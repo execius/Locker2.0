@@ -178,6 +178,14 @@ do {\
   }\
 } while (0)
 
+#define ERROR_CHECK_NULL_SET_RC_GOTO(ptr,errcode,desc,rc,label) \
+do {\
+  if(NULL == (ptr)){\
+    Error_LogHelper(errcode, desc, __LINE__, __func__, __FILE__);\
+    (rc) = (errcode);\
+    goto label;\
+  }\
+} while (0)
 /*mallocs the requested size into ptr and checks if 
  * the allocation is successfull*/
 #define MALLOC_CHECK_NULL_RET(ptr,size,MemAllocError) \

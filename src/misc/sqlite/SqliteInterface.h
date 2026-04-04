@@ -19,6 +19,17 @@ int insert_config(sqlite3 *userdb
     ,const HashingField_t *hashed_pass
     ,const ByteBuff_t *lookup_salt
     ,const UserConfig_t *userconfig);
+int insert_account(sqlite3 *userdb,
+    EncryptionField_t *username_cipher,
+    EncryptionField_t *email_cipher,
+    EncryptionField_t *password_cipher,
+    EncryptionField_t *platform_cipher,
+    EncryptionField_t *note_cipher,
+    HashingField_t *username_hash,
+    HashingField_t *platform_hash,
+    HashingField_t *email_hash);
+
+
   const char *master_db_template =
     "\
 CREATE TABLE master (\
@@ -74,4 +85,18 @@ INSERT INTO configs (\
     lookup_salt,\
     userconfig\
 ) VALUES (?, ?, ?, ?);";
+
+const char *get_account_by_id_sql = "\
+SELECT \
+    username_cipher,\
+    email_cipher,\
+    password_cipher,\
+    platform_cipher,\
+    note_cipher,\
+    username_hash,\
+    platform_hash,\
+    email_hash\
+    id,\
+FROM credentials \
+WHERE id = ?;";
 #endif /* ifndef MACRO */
