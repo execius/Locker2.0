@@ -335,3 +335,121 @@ int UserGetUserConf(const user_t *user,UserConfig_t **userconf){
       sizeof(UserConfig_t));
   return ERROR_SUCCESS;
 }
+int UserOpenDb(user_t *user,sqlite3 **userdb)
+{
+  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  ERROR_CHECK_NULL_LOG(userdb,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  int rc = 0 ;
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (OpenDb(userdb,user->user_db_path)),
+      ERROR_SUCCESS,
+      ERROR_CANNOT_OPEN_DB,
+      "cannot open user db",
+      rc,cleanup);
+  rc = ERROR_SUCCESS;
+  goto cleanup;
+cleanup:
+  return rc;
+}
+
+int UserMakeDb(user_t *user)
+{
+  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  int rc = 0 ;
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (make_user_db(user->user_db_path)
+       ),
+      ERROR_SUCCESS,
+      ERROR_USER_MAKEDB,
+      "failed to create user db",
+      rc,cleanup);
+  rc = ERROR_SUCCESS;
+cleanup:
+  return rc;
+}
+int UserInsertDb(user_t *user,sqlite3 *master)
+{
+  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  ERROR_CHECK_NULL_LOG(master,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  int rc = 0 ;
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (insert_user_db(master
+                      ,user->username
+                      ,user->user_db_path)
+       ),
+      ERROR_SUCCESS,
+      ERROR_USER_INSRTDB,
+      "failed to inset user db",
+      rc,cleanup);
+  rc = ERROR_SUCCESS;
+  goto cleanup;
+cleanup:
+  return rc;
+}
+
+int UserInsertConfig(user_t *user,sqlite3 *userdb)
+{
+  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  ERROR_CHECK_NULL_LOG(userdb,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  int rc = 0 ;
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (insert_config(userdb
+                      ,user->username
+                      ,user->hashed_pass
+                      ,user->lookup_salt
+                      ,&user->userconf)
+       ),
+      ERROR_SUCCESS,
+      ERROR_USER_INSRTCONF,
+      "failed to inset user configs",
+      rc,cleanup);
+  rc = ERROR_SUCCESS;
+  goto cleanup;
+cleanup:
+  return rc;
+}
+
+
+int UserDbSetUp(user_t *user ,sqlite3 *master)
+{
+
+  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  ERROR_CHECK_NULL_LOG(master,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+
+  int rc = 0;
+  sqlite3 *userdb = NULL;
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (UserMakeDb(user)
+       ),
+      ERROR_SUCCESS,
+      ERROR_USER_MAKEDB,
+      "failed to create user db",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (UserInsertDb(user ,master)
+       ),
+      ERROR_SUCCESS,
+      ERROR_USER_INSRTDB,
+      "failed to inset user db",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (UserOpenDb(user,&userdb)),
+      ERROR_SUCCESS,
+      ERROR_CANNOT_OPEN_DB,
+      "cannot open user db",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (UserInsertConfig(user,userdb)
+       ),
+      ERROR_SUCCESS,
+      ERROR_USER_INSRTCONF,
+      "failed to inset user configs",
+      rc,cleanup);
+cleanup :
+  if(userdb) CloseDb(userdb);
+  return rc;
+}

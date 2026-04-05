@@ -8,6 +8,7 @@ typedef struct user_s user_t;
 #include "usersconfig.h"
 #include "bytebuffer.h" 
 #include "encryption.h"
+#include "SqliteInterface.h"
 
 
 int CreateUser(user_t **user
@@ -29,6 +30,10 @@ int UserGetLookupSalt(const user_t *user,ByteBuff_t **lookup_salt);
 int UserGetHashedPass(const user_t *user,HashingField_t **hashed_pass);
 int UserGetDbPath(const user_t *user, ByteBuff_t **user_db_path);
 int UserGetUserConf(const user_t *user,UserConfig_t **userconf);
+int UserOpenDb(user_t *user,sqlite3 **userdb);
+int UserInsertDb(user_t *user,sqlite3 *master);
+int UserInsertConfig(user_t *user,sqlite3 *master);
+int UserDbSetUp(user_t *user ,sqlite3 *master);
 
 enum  UserErrors
 { 
@@ -38,7 +43,11 @@ enum  UserErrors
   ERROR_USER_GET_DBPATH = -3003,
   ERROR_USER_GET_KEY = -3004,
   ERROR_USER_GET_LOOKUPSALT = -3005,
-  ERROR_USER_GET_HASHED_PASS = -3006
+  ERROR_USER_GET_HASHED_PASS = -3006,
+  ERROR_USER_OPENDDB = -3007,
+  ERROR_USER_INSRTDB = -3008,
+  ERROR_USER_INSRTCONF = -3009,
+  ERROR_USER_MAKEDB = -3010
 
 };
 

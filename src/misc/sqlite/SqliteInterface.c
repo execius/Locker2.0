@@ -1,23 +1,108 @@
 #include "SqliteInterface.h"
 
+  const char *master_db_template =
+    "\
+CREATE TABLE master (\
+id INTEGER PRIMARY KEY,\
+username TEXT NOT NULL UNIQUE,\
+db_path TEXT NOT NULL UNIQUE);";
+
+  const char *creds_template =
+    "\
+CREATE TABLE credentials (\
+id INTEGER PRIMARY KEY,\
+username_cipher BLOB NOT NULL ,\
+email_cipher BLOB NOT NULL ,\
+password_cipher BLOB NOT NULL ,\
+platform_cipher BLOB NOT NULL ,\
+note_cipher BLOB NOT NULL,\
+username_hash BLOB NOT NULL ,\
+platform_hash BLOB NOT NULL ,\
+email_hash BLOB NOT NULL);\
+CREATE INDEX idx_username_hash ON credentials(username_hash);\
+CREATE INDEX idx_email_hash ON credentials(email_hash);\
+CREATE INDEX idx_platform_hash ON credentials(platform_hash)";
 
 
-int OpenDb(sqlite3 **db,const char *path){
+  const char *configs_template =
+    "\
+CREATE TABLE configs (\
+id INTEGER PRIMARY KEY CHECK (id = 1),\
+username TEXT NOT NULL ,\
+hashed_pass BLOB NOT NULL ,\
+lookup_salt BLOB NOT NULL ,\
+userconfig BLOB NOT NULL );WITHOUT ROWID";
+
+const char *insert_user_db_sql = "\
+INSERT INTO master (username, db_path)\
+VALUES (?, ?);";
+
+const char *insert_acccount_sql = "\
+INSERT INTO credentials (\
+    username_cipher,\
+    email_cipher,\
+    password_cipher,\
+    platform_cipher,\
+    note_cipher,\
+    username_hash,\
+    platform_hash,\
+    email_hash\
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
+const char *insert_config_sql = "\
+INSERT INTO configs (\
+    username,\
+    hashed_pass,\
+    lookup_salt,\
+    userconfig\
+) VALUES (?, ?, ?, ?);";
+
+const char *get_account_by_id_sql = "\
+SELECT \
+    username_cipher,\
+    email_cipher,\
+    password_cipher,\
+    platform_cipher,\
+    note_cipher,\
+    username_hash,\
+    platform_hash,\
+    email_hash,\
+    id\
+FROM credentials \
+WHERE id = ?;";
+
+
+int OpenDb(sqlite3 **db,const ByteBuff_t *path){
 
   ERROR_CHECK_NULL_LOG(path,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
 
+  int rc = 0;
+  char *path_str = NULL;
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (GetBuffByteBuff_NullTerminated(path
+                                      ,(unsigned char **)&path)
+      ),
+      ERROR_SUCCESS,
+      ERROR_GETBUFF_NL_FAILURE,
+      "failed to get user db path null terminated str from byte buff",
+      rc,cleanup);
+
   ERROR_CHECK_SUCCESS_LOG(
-    (sqlite3_open(path,db)),
+    (sqlite3_open(path_str,db)),
     SQLITE_OK,
     ERROR_SQLITE_FAILURE,
     sqlite3_errmsg(*db));
 
-  return ERROR_SUCCESS;
+  rc = ERROR_SUCCESS;
+cleanup :
+  if (path_str){ 
+    OPENSSL_cleanse(path_str,strlen(path_str));
+    free(path_str);
+    }
+  return  ERROR_SUCCESS;
 }
 
 int make_master_db(void){
   char *err = NULL;
-  char *master_db_filepath_str = NULL;
   ByteBuff_t *master_db_filepath = NULL;
   int rc = 0;
   sqlite3 *master;
@@ -38,19 +123,10 @@ int make_master_db(void){
       "failed to append '/master.db' while building master db path",
       rc,cleanup);
 
-  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-      (GetBuffByteBuff_NullTerminated(master_db_filepath
-                                      ,(unsigned char **)&master_db_filepath_str)
-       ),
-      ERROR_SUCCESS,
-      ERROR_APPENDSTRBUFF_FAILED,
-      "failed to get master db path null terminated str from byte buff",
-      rc,cleanup);
-  
 
 
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-  (OpenDb(&master,master_db_filepath_str)),
+  (OpenDb(&master,master_db_filepath)),
   ERROR_SUCCESS,
   ERROR_CANNOT_OPEN_DB,
   "cannot open db",
@@ -70,45 +146,19 @@ int make_master_db(void){
   rc = ERROR_SUCCESS;
 cleanup:
   if (master_db_filepath) DestroyByteBuff_Secure(master_db_filepath);
-  if (master_db_filepath_str){ 
-    OPENSSL_cleanse(master_db_filepath_str,strlen(master_db_filepath_str));
-    free(master_db_filepath_str);
-    }
   if (err) free(err);
   return rc;
 
 }
-int make_user_db(user_t *user){
-  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+int make_user_db(ByteBuff_t *user_db_filepath){
+
+  ERROR_CHECK_NULL_LOG(user_db_filepath,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   char *err = NULL  ;
-  ByteBuff_t *username = NULL;
-  ByteBuff_t *user_db_filepath = NULL;
-  char *user_db_filepath_str = NULL;
   sqlite3 *user_db;
   int rc = 0;
-  ERROR_CHECK_SUCCESS_LOG(
-      (UserGetUsername(user,&username)),
-      ERROR_SUCCESS,
-      ERROR_USER_GET_USERNAME,
-      "failed to get username from user");
 
-
-  ERROR_CHECK_SUCCESS_LOG(
-      (UserGetDbPath(user,&user_db_filepath)),
-      ERROR_SUCCESS,
-      ERROR_USER_GET_DBPATH,
-      "failed to get user db filepath from user");
-  
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-      (GetBuffByteBuff_NullTerminated(user_db_filepath
-                                      ,(unsigned char **)&user_db_filepath_str)
-       ),
-      ERROR_SUCCESS,
-      ERROR_GETBUFF_NL_FAILURE,
-      "failed to get user db path null terminated str from byte buff",
-      rc,cleanup);
-  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-      (OpenDb(&user_db,user_db_filepath_str)),
+      (OpenDb(&user_db,user_db_filepath)),
       ERROR_SUCCESS,
       ERROR_CANNOT_OPEN_DB,
       "cannot open user db",
@@ -138,15 +188,7 @@ int make_user_db(user_t *user){
   rc = ERROR_SUCCESS;
   goto cleanup;
 cleanup:
-  if (username) DestroyByteBuff_Secure(username);
-  if (user_db_filepath) DestroyByteBuff_Secure(user_db_filepath);
-  if (user_db_filepath_str) {
-    OPENSSL_cleanse(user_db_filepath_str,strlen(user_db_filepath_str));
-    free(user_db_filepath_str);
-    }
-  if (err) free(err);
   return rc;
-
 }
 
 int CloseDb(sqlite3 *db){
@@ -159,11 +201,12 @@ int CloseDb(sqlite3 *db){
 
 
 
-int insert_user_db(sqlite3 *master,user_t *user){
+int insert_user_db(sqlite3 *master,
+    const ByteBuff_t *username,
+    const ByteBuff_t *user_db_filepath){
   ERROR_CHECK_NULL_LOG(master,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
-  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
-  ByteBuff_t *username = NULL,
-             *user_db_filepath = NULL;
+  ERROR_CHECK_NULL_LOG(username,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(user_db_filepath,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   unsigned char *username_serialized = NULL,
                 *user_db_filepath_serialized = NULL;
   size_t user_db_filepath_serialized_length = 0 ,
@@ -181,20 +224,6 @@ int insert_user_db(sqlite3 *master,user_t *user){
      SQLITE_OK,
      ERROR_SQLITE_FAILURE,
      "filed to preapare stmt",
-     rc,cleanup);
-  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-      (UserGetUsername(user,&username)),
-      ERROR_SUCCESS,
-      ERROR_USER_GET_USERNAME,
-      "failed to get username from user",
-     rc,cleanup);
-
-
-  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-      (UserGetDbPath(user,&user_db_filepath)),
-      ERROR_SUCCESS,
-      ERROR_USER_GET_DBPATH,
-      "failed to get user db filepath from user",
      rc,cleanup);
   
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
@@ -252,10 +281,6 @@ int insert_user_db(sqlite3 *master,user_t *user){
   rc = ERROR_SUCCESS;
   goto cleanup;
 cleanup:
-  if (username) 
-    DestroyByteBuff_Secure(username);
-  if (user_db_filepath) 
-    DestroyByteBuff_Secure(user_db_filepath);
   if (username_serialized) {
     OPENSSL_cleanse(username_serialized
         ,username_serialized_length);

@@ -814,3 +814,119 @@ cleanup:
   return rc;
 }
 
+int FetchEncryptedAccount(user_t *user
+    ,EncryptedAccount_t **eac 
+    ,uint64_t id)
+{
+
+  ERROR_CHECK_NULL_LOG(eac,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+
+  *eac = NULL;
+  int rc = 0;
+
+  uint64_t fetchedid;
+  EncryptionField_t *username_cipher = NULL;
+  EncryptionField_t *email_cipher = NULL;
+  EncryptionField_t *password_cipher = NULL;
+  EncryptionField_t *platform_cipher = NULL;
+  EncryptionField_t *note_cipher = NULL;
+  HashingField_t *username_hash = NULL;
+  HashingField_t *platform_hash = NULL;
+  HashingField_t *email_hash = NULL;
+  sqlite3 *userdb = NULL;
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+     (UserOpenDb(
+       user,
+       &userdb)
+     ),
+    ERROR_SUCCESS,
+    ERROR_USER_OPENDDB,
+    "failed to open user db",
+    rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+     (fetch_account(
+       userdb,
+       id,
+       &username_cipher,
+       &email_cipher,
+       &password_cipher,
+       &platform_cipher,
+       &note_cipher,
+       &username_hash,
+       &platform_hash,
+       &email_hash,
+       &fetchedid
+       )
+     ),
+    ERROR_SUCCESS,
+    ERROR_FETCHACCOUNT_FAILURE,
+    "failed to fetch account",
+    rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+
+     (InitEncryptedAccount(
+       eac,
+       username_cipher,
+       password_cipher,
+       email_cipher,
+       platform_cipher,
+       note_cipher,
+       username_hash,
+       platform_hash,
+       email_hash)
+     ),
+    ERROR_SUCCESS,
+    ERROR_ENCACCOUNT_INNIT_FAILURE,
+    "failed to initialize encrypted account",
+    rc,cleanup);
+  (*eac)->id = fetchedid;
+cleanup:
+
+  if (userdb)
+    sqlite3_close(userdb);
+  if (username_cipher)    DestroyEncryptionField(username_cipher);
+  if (password_cipher)    DestroyEncryptionField(password_cipher);
+  if (email_cipher)       DestroyEncryptionField(email_cipher);
+  if (platform_cipher)    DestroyEncryptionField(platform_cipher);
+  if (note_cipher)        DestroyEncryptionField(note_cipher);
+  if (username_hash)    DestroyHashingField(username_hash);
+  if (platform_hash)    DestroyHashingField(platform_hash);
+  if (email_hash)       DestroyHashingField(email_hash);
+  return rc;
+  
+}
+int FetchAccount(user_t *user
+    ,Account_t **acc 
+    ,uint64_t id)
+{
+
+  ERROR_CHECK_NULL_LOG(acc,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+
+  *acc = NULL;
+  int rc = 0;
+  EncryptedAccount_t *eac = NULL;
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+     (FetchEncryptedAccount(user, &eac, id)
+     ),
+    ERROR_SUCCESS,
+    ERROR_FETCHENCACC_FAILURE,
+    "failed to fetch encrypted account from db",
+    rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+     (DecryptAccount(eac, acc, user)
+     ),
+    ERROR_SUCCESS,
+    ERROR_DECACCOUNT_FAILURE,
+    "failed to decrypt account",
+    rc,cleanup);
+
+cleanup:
+  if (eac)       DestroyEncryptedAccount(eac);
+  return rc;
+}
