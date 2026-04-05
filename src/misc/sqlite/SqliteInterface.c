@@ -31,11 +31,36 @@ id INTEGER PRIMARY KEY CHECK (id = 1),\
 username TEXT NOT NULL ,\
 hashed_pass BLOB NOT NULL ,\
 lookup_salt BLOB NOT NULL ,\
-userconfig BLOB NOT NULL );WITHOUT ROWID";
+userconfig BLOB NOT NULL ,\
+key_derivation_salt BLOB NOT NULL )";
 
 const char *insert_user_db_sql = "\
 INSERT INTO master (username, db_path)\
 VALUES (?, ?);";
+
+const char *get_user_db_path_sql =
+"SELECT \
+    db_path \
+FROM master \
+WHERE username = ?;";
+
+const char *insert_config_sql =
+"INSERT INTO configs (\
+    username,\
+    hashed_pass,\
+    lookup_salt,\
+    userconfig,\
+    key_derivation_salt,\
+    id\
+) VALUES (?, ?, ?, ?, ?, 1);";
+const char *get_config_sql =
+"SELECT \
+    hashed_pass,\
+    lookup_salt,\
+    userconfig,\
+    key_derivation_salt \
+FROM configs \
+WHERE id = 1;";
 
 const char *insert_acccount_sql = "\
 INSERT INTO credentials (\
@@ -48,13 +73,6 @@ INSERT INTO credentials (\
     platform_hash,\
     email_hash\
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
-const char *insert_config_sql = "\
-INSERT INTO configs (\
-    username,\
-    hashed_pass,\
-    lookup_salt,\
-    userconfig\
-) VALUES (?, ?, ?, ?);";
 
 const char *get_account_by_id_sql = "\
 SELECT \
@@ -66,7 +84,7 @@ SELECT \
     username_hash,\
     platform_hash,\
     email_hash,\
-    id\
+    id \
 FROM credentials \
 WHERE id = ?;";
 
@@ -79,7 +97,7 @@ int OpenDb(sqlite3 **db,const ByteBuff_t *path){
   char *path_str = NULL;
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (GetBuffByteBuff_NullTerminated(path
-                                      ,(unsigned char **)&path)
+                                      ,(unsigned char **)&path_str)
       ),
       ERROR_SUCCESS,
       ERROR_GETBUFF_NL_FAILURE,
@@ -101,11 +119,10 @@ cleanup :
   return  ERROR_SUCCESS;
 }
 
-int make_master_db(void){
+int open_master_db(void){
   char *err = NULL;
   ByteBuff_t *master_db_filepath = NULL;
   int rc = 0;
-  sqlite3 *master;
 
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (DupByteBuff(&master_db_filepath,
@@ -126,14 +143,52 @@ int make_master_db(void){
 
 
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-  (OpenDb(&master,master_db_filepath)),
+  (OpenDb(&globalconf->master,master_db_filepath)),
+  ERROR_SUCCESS,
+  ERROR_CANNOT_OPEN_DB,
+  "cannot open db",
+  rc,cleanup);
+
+
+  rc = ERROR_SUCCESS;
+cleanup:
+  if (master_db_filepath) DestroyByteBuff_Secure(master_db_filepath);
+  if (err) free(err);
+  return rc;
+
+}
+int make_master_db(void){
+  char *err = NULL;
+  ByteBuff_t *master_db_filepath = NULL;
+  int rc = 0;
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DupByteBuff(&master_db_filepath,
+                    globalconf->master_db_dir_path)
+       ),
+      ERROR_SUCCESS,
+      ERROR_APPENDBUFF_FAILED,
+      "failed to duplicate byte buff while building master db path",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (AppendStrByteBuff(master_db_filepath,"/master.db")
+       ),
+      ERROR_SUCCESS,
+      ERROR_APPENDSTRBUFF_FAILED,
+      "failed to append '/master.db' while building master db path",
+      rc,cleanup);
+
+
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+  (OpenDb(&globalconf->master,master_db_filepath)),
   ERROR_SUCCESS,
   ERROR_CANNOT_OPEN_DB,
   "cannot open db",
   rc,cleanup);
 
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-    (sqlite3_exec(master,
+    (sqlite3_exec(globalconf->master,
                   master_db_template,
                   NULL,
                   NULL,
@@ -201,12 +256,11 @@ int CloseDb(sqlite3 *db){
 
 
 
-int insert_user_db(sqlite3 *master,
-    const ByteBuff_t *username,
+int insert_user_db( const ByteBuff_t *username,
     const ByteBuff_t *user_db_filepath){
-  ERROR_CHECK_NULL_LOG(master,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   ERROR_CHECK_NULL_LOG(username,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   ERROR_CHECK_NULL_LOG(user_db_filepath,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  sqlite3 *master = globalconf->master;
   unsigned char *username_serialized = NULL,
                 *user_db_filepath_serialized = NULL;
   size_t user_db_filepath_serialized_length = 0 ,
@@ -298,18 +352,28 @@ int insert_config(sqlite3 *userdb
     ,const ByteBuff_t *username
     ,const HashingField_t *hashed_pass
     ,const ByteBuff_t *lookup_salt
-    ,const UserConfig_t *userconfig){
-  ERROR_CHECK_NULL_LOG(userdb,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
-  ERROR_CHECK_NULL_LOG(username,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
-  ERROR_CHECK_NULL_LOG(hashed_pass,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
-  ERROR_CHECK_NULL_LOG(lookup_salt,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+    ,const UserConfig_t *userconfig
+    ,const ByteBuff_t *key_derivation_salt)
+{
+  ERROR_CHECK_NULL_LOG(userdb,
+      ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(username,
+      ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(hashed_pass,
+      ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(lookup_salt,
+      ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(key_derivation_salt,
+      ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   int rc = 0;
   ByteBuff_t *hashed_pass_serialized_bb = NULL;
   unsigned char *username_serialized = NULL,
                 *lookup_salt_serialized = NULL,
+                *key_derivation_salt_serialized = NULL,
                 *hashed_pass_serialized_bb_serialized = NULL;
   size_t username_serialized_length = 0,
          lookup_salt_serialized_length = 0,
+         key_derivation_salt_serialized_length = 0,
          hashed_pass_serialized_bb_serialized_length = 0;
 
   sqlite3_stmt *stmt;
@@ -358,6 +422,14 @@ int insert_config(sqlite3 *userdb
       "failed to serialize lookup_salt",
       rc,cleanup);
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (SerializeByteBuff(key_derivation_salt
+                         ,&key_derivation_salt_serialized
+                         ,&key_derivation_salt_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to serialize key_derivation_salt",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
     (sqlite3_bind_blob(stmt,
                        1,
                        username_serialized,
@@ -391,6 +463,28 @@ int insert_config(sqlite3 *userdb
      "failed to bind lookup_salt to sql stmt",
      rc,cleanup);
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (sqlite3_bind_blob(stmt,
+                       4,
+                       userconfig,
+                       sizeof(UserConfig_t),
+                       SQLITE_TRANSIENT)
+                      ),
+     SQLITE_OK,
+     ERROR_SQLITE_FAILURE,
+     "failed to bind userconfig to sql stmt",
+     rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (sqlite3_bind_blob(stmt,
+                       5,
+                       key_derivation_salt_serialized,
+                       key_derivation_salt_serialized_length,
+                       SQLITE_TRANSIENT)
+                      ),
+     SQLITE_OK,
+     ERROR_SQLITE_FAILURE,
+     "failed to bind lookup_salt to sql stmt",
+     rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
     (sqlite3_step(stmt)),
     SQLITE_DONE,
     ERROR_SQLITE_FAILURE,
@@ -408,6 +502,11 @@ cleanup:
     OPENSSL_cleanse(username_serialized
         ,username_serialized_length);
     free(username_serialized);
+  }
+  if (key_derivation_salt_serialized) {
+    OPENSSL_cleanse(key_derivation_salt_serialized
+        ,key_derivation_salt_serialized_length);
+    free(key_derivation_salt_serialized);
   }
   if (lookup_salt_serialized) {
     OPENSSL_cleanse(lookup_salt_serialized
@@ -474,7 +573,7 @@ int insert_account(sqlite3 *userdb,
 
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
     (sqlite3_prepare_v2(userdb
-                        ,insert_config_sql
+                        ,insert_acccount_sql
                         ,-1
                         ,&stmt
                         ,NULL)
@@ -1054,5 +1153,245 @@ cleanup:
   if (platform_hash_serialized_bb) 
     DestroyByteBuff_Secure(platform_hash_serialized_bb);
 
+  return rc;
+}
+
+
+int fetch_user_db_path(ByteBuff_t *username
+    ,ByteBuff_t **user_db_filepath)
+{
+  ERROR_CHECK_NULL_LOG(username,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(user_db_filepath,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  sqlite3 *master = globalconf->master;
+  int rc = 0;
+  unsigned char *username_serialized = NULL,
+                *user_db_filepath_serialized = NULL;
+
+  size_t user_db_filepath_serialized_length = 0 ,
+         username_serialized_length = 0;
+  sqlite3_stmt *stmt;
+  
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (sqlite3_prepare_v2(master
+                        ,get_user_db_path_sql
+                        ,-1
+                        ,&stmt
+                        ,NULL)
+     ),
+     SQLITE_OK,
+     ERROR_SQLITE_FAILURE,
+     "filed to preapare stmt",
+     rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (SerializeByteBuff(username
+                         ,&username_serialized
+                         ,&username_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to serialize username",
+      rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (sqlite3_bind_blob(stmt,
+                       1,
+                       username_serialized,
+                       username_serialized_length,
+                       SQLITE_TRANSIENT)
+                      ),
+     SQLITE_OK,
+     ERROR_SQLITE_FAILURE,
+     "failed to bind username to sql stmt",
+     rc,cleanup);
+
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (sqlite3_step(stmt)),
+    SQLITE_ROW,
+    ERROR_SQLITE_FAILURE,
+    "failed to step stmt",
+    rc,cleanup);
+
+  ERROR_CHECK_NULL_SET_RC_GOTO(
+      (user_db_filepath_serialized = (unsigned char *) sqlite3_column_blob(stmt, 0)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get user_db_filepath_serialized from db",
+      rc,cleanup);
+      user_db_filepath_serialized_length = sqlite3_column_bytes(stmt, 0);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeByteBuff(user_db_filepath
+                         ,user_db_filepath_serialized
+                         ,user_db_filepath_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to deserialize email_hash_serialized_bb",
+      rc,cleanup);
+
+  rc = ERROR_SUCCESS;
+  goto cleanup;
+cleanup:
+   sqlite3_finalize(stmt);
+  if (username_serialized){ 
+    OPENSSL_cleanse(username_serialized,
+        username_serialized_length);
+    free(username_serialized);
+    }
+
+  if (user_db_filepath_serialized){ 
+    OPENSSL_cleanse(user_db_filepath_serialized,
+        user_db_filepath_serialized_length);
+    free(user_db_filepath_serialized);
+    }
+  return rc;
+}
+
+
+int fetch_config(ByteBuff_t *username,
+    ByteBuff_t **lookup_salt,
+    HashingField_t **hashed_pass,
+    UserConfig_t **userconfig,
+    ByteBuff_t **key_derivation_salt)
+{
+  ERROR_CHECK_NULL_LOG(username,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(hashed_pass,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(lookup_salt,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(userconfig,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  sqlite3 *userdb = NULL;
+  int rc = 0;
+  ByteBuff_t *hashed_pass_serialized_bb = NULL,
+             *user_db_filepath = NULL;
+  const unsigned char *hashed_pass_serialized_bb_serialized = NULL,
+        *lookup_salt_serialized = NULL,
+        *key_derivation_salt_serialized = NULL,
+        *userconfig_copy = NULL;
+
+  size_t  hashed_pass_serialized_bb_serialized_length = 0,
+          lookup_salt_serialized_length = 0,
+          key_derivation_salt_serialized_length = 0,
+          userconfig_copy_length = 0;
+
+  sqlite3_stmt *stmt = NULL;
+
+  MALLOC_CHECK_NULL_LOG(*userconfig,
+      sizeof(UserConfig_t),
+      ERROR_MEMORY_ALLOCATION,
+      "cannot allocate buffer for userconfig");
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (fetch_user_db_path(username,&user_db_filepath)),
+    ERROR_SUCCESS,
+    ERROR_SQL_FETCHUSERDB_FAILURE,
+    "failed fetch user_db_filepath from db",
+    rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+  (OpenDb(&userdb,user_db_filepath)),
+  ERROR_SUCCESS,
+  ERROR_CANNOT_OPEN_DB,
+  "cannot open user db",
+  rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (sqlite3_prepare_v2(userdb
+                        ,get_config_sql
+                        ,-1
+                        ,&stmt
+                        ,NULL)
+     ),
+     SQLITE_OK,
+     ERROR_SQLITE_FAILURE,
+     "filed to preapare stmt",
+     rc,cleanup);
+
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (sqlite3_step(stmt)),
+    SQLITE_ROW,
+    ERROR_SQLITE_FAILURE,
+    "failed to step stmt",
+    rc,cleanup);
+
+  ERROR_CHECK_NULL_SET_RC_GOTO(
+      (hashed_pass_serialized_bb_serialized = sqlite3_column_blob(stmt, 0)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get hashed_pass_serialized_bb_serialized from db",
+      rc,cleanup);
+      hashed_pass_serialized_bb_serialized_length = sqlite3_column_bytes(stmt, 0);
+
+  ERROR_CHECK_NULL_SET_RC_GOTO(
+      (lookup_salt_serialized = sqlite3_column_blob(stmt, 1)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get lookup_salt_serialized from db",
+      rc,cleanup);
+      lookup_salt_serialized_length = sqlite3_column_bytes(stmt, 1);
+
+  ERROR_CHECK_NULL_SET_RC_GOTO(
+      ( userconfig_copy = sqlite3_column_blob(stmt,2)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get password_cipher from db",
+      rc,cleanup);
+      userconfig_copy_length = sqlite3_column_bytes(stmt,2);
+  ERROR_CHECK_NULL_SET_RC_GOTO(
+      (key_derivation_salt_serialized = sqlite3_column_blob(stmt, 3)),
+      
+      ERROR_SQLITE_FAILURE,
+      "failed to get key_derivation_salt_serialized from db",
+      rc,cleanup);
+      key_derivation_salt_serialized_length = sqlite3_column_bytes(stmt, 3);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (!(userconfig_copy_length == sizeof(UserConfig_t))),
+      0,
+      ERROR_SQLITE_FAILURE,
+      "userconfig got corrupted",
+      rc,cleanup);
+
+      memcpy(*userconfig,userconfig_copy,userconfig_copy_length);
+        
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeByteBuff(lookup_salt
+                         ,lookup_salt_serialized
+                         ,lookup_salt_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to deserialize lookup_salt_serialized",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeByteBuff(key_derivation_salt
+                         ,key_derivation_salt_serialized
+                         ,key_derivation_salt_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to deserialize key_derivation_salt_serialized",
+      rc,cleanup);
+
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeByteBuff(&hashed_pass_serialized_bb
+                         ,hashed_pass_serialized_bb_serialized
+                         ,hashed_pass_serialized_bb_serialized_length)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZATION_FAILURE,
+      "failed to deserialize hashed_pass_serialized_bb_serialized",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (DeserializeHashingField(hashed_pass
+                         ,hashed_pass_serialized_bb)),
+      ERROR_SUCCESS,
+      ERROR_SERIALIZEHASHINGFIELD_FAILURE,
+      "failed to deserialize hashed_pass_serialized_bb",
+      rc,cleanup);
+  rc = ERROR_SUCCESS;
+  goto cleanup;
+cleanup:
+   sqlite3_finalize(stmt);
+   CloseDb(userdb);
+  if (hashed_pass_serialized_bb) 
+    DestroyByteBuff_Secure(hashed_pass_serialized_bb);
+  if (user_db_filepath) 
+    DestroyByteBuff_Secure(user_db_filepath);
   return rc;
 }

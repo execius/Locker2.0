@@ -6,18 +6,15 @@ typedef struct ByteBuff_s {
   size_t len;
 } ByteBuff_t ;
 
-int bytebuffsize(void) {
-  return sizeof(ByteBuff_t);
-}
 int InitByteBuff(ByteBuff_t **bytebuff,const unsigned char *buff,size_t len){
   ERROR_CHECK_NULL_LOG(bytebuff,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   ERROR_CHECK_NULL_LOG(buff,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   int rc = 0;
-  ERROR_CHECK_SUCCESS_LOG(
-      (len < 1 || len > SIZE_MAX),
-      1,
-      ERROR_LEN_VAR_INVALID,
-      "username lenght is invalid");
+  // ERROR_CHECK_SUCCESS_LOG(
+  //     (len < 1 || len > SIZE_MAX),
+  //     1,
+  //     ERROR_LEN_VAR_INVALID,
+  //     "lenght is invalid");
 
   MALLOC_CHECK_NULL_LOG(*bytebuff,
       sizeof(ByteBuff_t),
@@ -193,4 +190,3 @@ int DeserializeByteBuff(ByteBuff_t **bytebuff,
       "failed to inittialize user");
   return ERROR_SUCCESS;
 }
-

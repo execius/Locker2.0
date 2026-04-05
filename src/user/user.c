@@ -17,7 +17,7 @@ int InitUser(user_t **user
              ,HashingField_t *key
              ,ByteBuff_t *lookup_salt
              ,ByteBuff_t *user_db_path
-             ,UserConfig_t userconfig)
+             ,UserConfig_t *userconfig)
 {
   ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   ERROR_CHECK_NULL_LOG(username,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
@@ -67,7 +67,7 @@ int InitUser(user_t **user
       ERROR_DUPHASHINGFIELD_FAILURE,
       "failed to duplicate key hashing field",
       rc,cleanup);
-  memcpy(&(*user)->userconf,&userconfig,sizeof(UserConfig_t));
+  memcpy(&(*user)->userconf,userconfig,sizeof(UserConfig_t));
 
   return ERROR_SUCCESS;
 cleanup:
@@ -82,7 +82,7 @@ cleanup:
 int CreateUser(user_t **user
     ,ByteBuff_t *username
     ,ByteBuff_t *password
-    ,UserConfig_t userconfig)
+    ,UserConfig_t *userconfig)
 
 {
   ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
@@ -135,8 +135,8 @@ int CreateUser(user_t **user
     (pkcs5_keyed_hash_HashingField(
       password_hash_hf,
       &hashed_pass_hf,
-      EVP_MD_size(hashing_options_fetchers[userconfig.hashing_option_idx]()),
-      hashing_options_fetchers[userconfig.hashing_option_idx](),
+      EVP_MD_size(hashing_options_fetchers[userconfig->hashing_option_idx]()),
+      hashing_options_fetchers[userconfig->hashing_option_idx](),
       globalconf->password_hashing_iters)),
     ERROR_SUCCESS,
     ERROR_HASH_FAILED,
@@ -147,8 +147,9 @@ int CreateUser(user_t **user
     (pkcs5_keyed_hash_HashingField(
       password_key_hf,
       &key_hf,
-      EVP_MD_size(hashing_options_fetchers[userconfig.key_hashing_option_idx]()),
-      hashing_options_fetchers[userconfig.key_hashing_option_idx](),
+      EVP_CIPHER_key_length(
+        encryption_options_fetchers[userconfig->encryption_option_idx]()),
+      hashing_options_fetchers[userconfig->key_hashing_option_idx](),
       globalconf->key_derivation_iters)),
     ERROR_SUCCESS,
     ERROR_HASH_FAILED,
@@ -368,15 +369,13 @@ int UserMakeDb(user_t *user)
 cleanup:
   return rc;
 }
-int UserInsertDb(user_t *user,sqlite3 *master)
+int UserInsertDb(user_t *user)
 {
   ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
-  ERROR_CHECK_NULL_LOG(master,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
   int rc = 0 ;
 
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-      (insert_user_db(master
-                      ,user->username
+      (insert_user_db( user->username
                       ,user->user_db_path)
        ),
       ERROR_SUCCESS,
@@ -389,18 +388,32 @@ cleanup:
   return rc;
 }
 
-int UserInsertConfig(user_t *user,sqlite3 *userdb)
+int UserInsertConfig(user_t *user)
 {
   ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
-  ERROR_CHECK_NULL_LOG(userdb,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
   int rc = 0 ;
 
+  sqlite3 *userdb = NULL;
+  ByteBuff_t *key_derivation_salt = NULL;
+  ERROR_CHECK_SUCCESS_LOG(
+      (HashingFieldGetSalt(user->key,&key_derivation_salt)),
+      ERROR_SUCCESS,
+      ERROR_HASHINGFIELD_GETTEXT_FAILURE,
+      "failed to get key_derivation_salt buff");
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (UserOpenDb(user,&userdb)),
+      ERROR_SUCCESS,
+      ERROR_CANNOT_OPEN_DB,
+      "cannot open user db",
+      rc,cleanup);
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (insert_config(userdb
                       ,user->username
                       ,user->hashed_pass
                       ,user->lookup_salt
-                      ,&user->userconf)
+                      ,&user->userconf 
+                      ,key_derivation_salt)
        ),
       ERROR_SUCCESS,
       ERROR_USER_INSRTCONF,
@@ -409,15 +422,16 @@ int UserInsertConfig(user_t *user,sqlite3 *userdb)
   rc = ERROR_SUCCESS;
   goto cleanup;
 cleanup:
+  CloseDb(userdb);
+  if (key_derivation_salt)DestroyByteBuff_Secure(key_derivation_salt);
   return rc;
 }
 
 
-int UserDbSetUp(user_t *user ,sqlite3 *master)
+int UserDbSetUp(user_t *user)
 {
 
   ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
-  ERROR_CHECK_NULL_LOG(master,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
 
   int rc = 0;
   sqlite3 *userdb = NULL;
@@ -430,26 +444,150 @@ int UserDbSetUp(user_t *user ,sqlite3 *master)
       "failed to create user db",
       rc,cleanup);
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-      (UserInsertDb(user ,master)
+      (UserInsertDb(user)
        ),
       ERROR_SUCCESS,
       ERROR_USER_INSRTDB,
       "failed to inset user db",
       rc,cleanup);
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-      (UserOpenDb(user,&userdb)),
-      ERROR_SUCCESS,
-      ERROR_CANNOT_OPEN_DB,
-      "cannot open user db",
-      rc,cleanup);
-  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-      (UserInsertConfig(user,userdb)
+      (UserInsertConfig(user)
        ),
       ERROR_SUCCESS,
       ERROR_USER_INSRTCONF,
       "failed to inset user configs",
       rc,cleanup);
+  rc = ERROR_SUCCESS;
 cleanup :
   if(userdb) CloseDb(userdb);
+  return rc;
+}
+
+int UserLoadFromDb(user_t **user,ByteBuff_t *username,ByteBuff_t *password)
+{
+  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  ERROR_CHECK_NULL_LOG(username,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  ERROR_CHECK_NULL_LOG(password,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  int rc = 0;
+  ByteBuff_t *lookup_salt = NULL,
+             *key_derivation_salt = NULL,
+             *user_db_path = NULL;
+  HashingField_t *hashed_pass = NULL,
+                 *key_hf = NULL,
+                 *password_key_hf = NULL;
+  UserConfig_t *userconfig = NULL;
+
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (InitByteBuff(&user_db_path,
+                    (unsigned char *)"",
+                    0)),
+      ERROR_SUCCESS,
+      ERROR_BUFFINIT_FAILURE,
+      "failed to initialize byte buffer for user db path",
+      rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (AppendByteBuff(user_db_path,
+                    globalconf->master_db_dir_path)
+       ),
+      ERROR_SUCCESS,
+      ERROR_APPENDBUFF_FAILED,
+      "failed to append byte buff while building user db path",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (AppendStrByteBuff(user_db_path,"/")
+       ),
+      ERROR_SUCCESS,
+      ERROR_APPENDSTRBUFF_FAILED,
+      "failed to append '/' while building user db path",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (AppendStrByteBuff(user_db_path,"users")
+       ),
+      ERROR_SUCCESS,
+      ERROR_APPENDSTRBUFF_FAILED,
+      "failed to append 'users' while building user db path",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (AppendStrByteBuff(user_db_path,"/")
+       ),
+      ERROR_SUCCESS,
+      ERROR_APPENDSTRBUFF_FAILED,
+      "failed to append '/' while building user db path",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (AppendByteBuff(user_db_path,
+                    username)
+       ),
+      ERROR_SUCCESS,
+      ERROR_APPENDBUFF_FAILED,
+      "failed to append byte buff while building user db path",
+      rc,cleanup);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (AppendStrByteBuff(user_db_path,".db")
+       ),
+      ERROR_SUCCESS,
+      ERROR_APPENDSTRBUFF_FAILED,
+      "failed to append '.db' while building user db path",
+      rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (fetch_config(username
+                  ,&lookup_salt
+                  ,&hashed_pass
+                  ,&userconfig
+                  ,&key_derivation_salt)
+       ),
+      ERROR_SUCCESS,
+      ERROR_SQL_FETCHCONFIG_FAILURE,
+      "failed to fetch user config",
+      rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (InitHashingField(&password_key_hf,
+                    password,
+                    key_derivation_salt)),
+      ERROR_SUCCESS,
+      ERROR_INITHASHINGFIELD_FAILURE,
+      "failed to create password_key hashing field",
+      rc,cleanup);
+
+  printf("%d\n",globalconf->key_derivation_iters);
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (pkcs5_keyed_hash_HashingField(
+      password_key_hf,
+      &key_hf,
+      EVP_CIPHER_key_length(
+        encryption_options_fetchers[userconfig->encryption_option_idx]()),
+      hashing_options_fetchers[userconfig->key_hashing_option_idx](),
+      globalconf->key_derivation_iters)),
+    ERROR_SUCCESS,
+    ERROR_HASH_FAILED,
+    "failed to derive encryption key",
+    rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+    (InitUser(
+      user,
+      username,
+      hashed_pass,
+      key_hf,
+      lookup_salt,
+      user_db_path,
+      userconfig)),
+    ERROR_SUCCESS,
+    ERROR_USER_INIT,
+    "failed to initialize user",
+    rc,cleanup);
+  rc = ERROR_SUCCESS;
+cleanup :
+  if (password_key_hf) DestroyHashingField(password_key_hf);
+  if (key_hf) DestroyHashingField(key_hf);
+  if (hashed_pass) DestroyHashingField(hashed_pass);
+  if (user_db_path)DestroyByteBuff_Secure(user_db_path);
+  if (lookup_salt)DestroyByteBuff_Secure(lookup_salt);
+  if (key_derivation_salt)DestroyByteBuff_Secure(key_derivation_salt);
+  if (userconfig) free(userconfig);
   return rc;
 }

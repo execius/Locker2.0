@@ -1,5 +1,14 @@
 #include "account.h"
+#include "encryption.h"
+#include "hashing.h"
 
+enum EncryptAccountErrors
+{ 
+  ERROR_ENCACCOUNT_INIT_FAILURE = -9001,
+  ERROR_ENCACCOUNT_ENCRYPTION_FAILURE = -9002,
+  ERROR_ENCACCOUNT_FETCH_FAILURE = -9003,
+  ERROR_ENCACCOUNT_INSERT_FAILURE = -9005
+};
 typedef struct EncryptedAccount_s {
 
   uint64_t id;
@@ -174,6 +183,20 @@ int AccountGetNote(const Account_t *account,ByteBuff_t **note){
 
 
 
+int DestroyEncryptedAccount(EncryptedAccount_t *account){
+  ERROR_CHECK_NULL_LOG(account,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  if (account->username_cipher)    DestroyEncryptionField(account->username_cipher);
+  if (account->password_cipher)    DestroyEncryptionField(account->password_cipher);
+  if (account->email_cipher)       DestroyEncryptionField(account->email_cipher);
+  if (account->platform_cipher)    DestroyEncryptionField(account->platform_cipher);
+  if (account->note_cipher)        DestroyEncryptionField(account->note_cipher);
+  if (account->username_hash)    DestroyHashingField(account->username_hash);
+  if (account->platform_hash)    DestroyHashingField(account->platform_hash);
+  if (account->email_hash)       DestroyHashingField(account->email_hash);
+  OPENSSL_cleanse(account, sizeof(EncryptedAccount_t));
+  free(account);
+  return ERROR_SUCCESS;
+}
 
 
 
@@ -282,20 +305,6 @@ cleanup:
   return rc;
 }
 
-int DestroyEncryptedAccount(EncryptedAccount_t *account){
-  ERROR_CHECK_NULL_LOG(account,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
-  if (account->username_cipher)    DestroyEncryptionField(account->username_cipher);
-  if (account->password_cipher)    DestroyEncryptionField(account->password_cipher);
-  if (account->email_cipher)       DestroyEncryptionField(account->email_cipher);
-  if (account->platform_cipher)    DestroyEncryptionField(account->platform_cipher);
-  if (account->note_cipher)        DestroyEncryptionField(account->note_cipher);
-  if (account->username_hash)    DestroyHashingField(account->username_hash);
-  if (account->platform_hash)    DestroyHashingField(account->platform_hash);
-  if (account->email_hash)       DestroyHashingField(account->email_hash);
-  OPENSSL_cleanse(account, sizeof(EncryptedAccount_t));
-  free(account);
-  return ERROR_SUCCESS;
-}
 
 
 int EncryptedAccountGetUsernameHash(const EncryptedAccount_t *eac,
@@ -406,7 +415,7 @@ int EncryptAccount(Account_t *account
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (UserGetUserConf(user,&userconfig)),
       ERROR_SUCCESS,
-      ERROR_GETUSRCONF_FAILURE,
+      ERROR_USER_GETUSERCONF_FAILURE,
       "error getting user config struct",
       rc,
       cleanup);
@@ -459,6 +468,7 @@ int EncryptAccount(Account_t *account
       "failed to create note encryption field",
       rc,
       cleanup);
+  
 
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (EncryptEncryptionField(type,
@@ -593,7 +603,7 @@ ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
        email_hash)
      ),
     ERROR_SUCCESS,
-    ERROR_ENCACCOUNT_INNIT_FAILURE,
+    ERROR_ENCACCOUNT_INIT_FAILURE,
     "failed to initialize encrypted account",
     rc,cleanup);
 
@@ -670,7 +680,7 @@ int DecryptAccount(EncryptedAccount_t *eac
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (UserGetUserConf(user,&userconfig)),
       ERROR_SUCCESS,
-      ERROR_GETUSRCONF_FAILURE,
+      ERROR_USER_GETUSERCONF_FAILURE,
       "error getting user config struct",
       rc,
       cleanup);
@@ -789,7 +799,7 @@ int DecryptAccount(EncryptedAccount_t *eac
        note_bb)
      ),
     ERROR_SUCCESS,
-    ERROR_ENCACCOUNT_INNIT_FAILURE,
+    ERROR_ENCACCOUNT_INIT_FAILURE,
     "failed to initialize encrypted account",
     rc,cleanup);
 
@@ -812,6 +822,51 @@ cleanup:
   if (key_hf) DestroyHashingField(key_hf);
   if (userconfig) free(userconfig);
   return rc;
+}
+
+int InsertEncryptedAccount(user_t *user
+    ,EncryptedAccount_t *eac )
+{
+
+  ERROR_CHECK_NULL_LOG(eac,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+
+  int rc = 0;
+  sqlite3 *userdb = NULL;
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+     (UserOpenDb(
+       user,
+       &userdb)
+     ),
+    ERROR_SUCCESS,
+    ERROR_USER_OPENDDB,
+    "failed to open user db",
+    rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+     (insert_account(
+       userdb,
+       eac->username_cipher,
+       eac->email_cipher,
+       eac->password_cipher,
+       eac->platform_cipher,
+       eac->note_cipher,
+       eac->username_hash,
+       eac->platform_hash,
+       eac->email_hash
+       )
+     ),
+    ERROR_SUCCESS,
+    ERROR_ENCACCOUNT_INSERT_FAILURE,
+    "failed to insert encrypted account",
+    rc,cleanup);
+
+cleanup:
+
+  if (userdb)
+    sqlite3_close(userdb);
+  return rc;
+  
 }
 
 int FetchEncryptedAccount(user_t *user
@@ -879,7 +934,7 @@ int FetchEncryptedAccount(user_t *user
        email_hash)
      ),
     ERROR_SUCCESS,
-    ERROR_ENCACCOUNT_INNIT_FAILURE,
+    ERROR_ENCACCOUNT_INIT_FAILURE,
     "failed to initialize encrypted account",
     rc,cleanup);
   (*eac)->id = fetchedid;
@@ -914,7 +969,7 @@ int FetchAccount(user_t *user
      (FetchEncryptedAccount(user, &eac, id)
      ),
     ERROR_SUCCESS,
-    ERROR_FETCHENCACC_FAILURE,
+    ERROR_ENCACCOUNT_FETCH_FAILURE,
     "failed to fetch encrypted account from db",
     rc,cleanup);
 
@@ -922,7 +977,7 @@ int FetchAccount(user_t *user
      (DecryptAccount(eac, acc, user)
      ),
     ERROR_SUCCESS,
-    ERROR_DECACCOUNT_FAILURE,
+    ERROR_ACCOUNT_DECRYPT_FAILURE,
     "failed to decrypt account",
     rc,cleanup);
 
@@ -930,3 +985,38 @@ cleanup:
   if (eac)       DestroyEncryptedAccount(eac);
   return rc;
 }
+
+
+int InsertAccount(user_t *user
+    ,Account_t *acc)
+{
+
+  ERROR_CHECK_NULL_LOG(acc,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+
+  int rc = 0;
+  EncryptedAccount_t *eac = NULL;
+
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+     (EncryptAccount(acc,&eac, user)
+     ),
+    ERROR_SUCCESS,
+    ERROR_ENCACCOUNT_ENCRYPTION_FAILURE,
+    "failed to encrypt account",
+    rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+     (InsertEncryptedAccount(user, eac)
+     ),
+    ERROR_SUCCESS,
+    ERROR_ENCACCOUNT_INSERT_FAILURE,
+    "failed to insert encrypted account to db",
+    rc,cleanup);
+cleanup:
+  if (eac)       DestroyEncryptedAccount(eac);
+  return rc;
+}
+
+
+

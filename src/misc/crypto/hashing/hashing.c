@@ -408,7 +408,7 @@ int pkcs5_keyed_hash_bytebuff(
       rc,cleanup);
 
 
-  ERROR_CHECK_SUCCESS_LOG(
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
   (PKCS5_PBKDF2_HMAC((char *)master_str, 
                      master_size,
                      salt_str,
@@ -420,7 +420,8 @@ int pkcs5_keyed_hash_bytebuff(
 
     LIBSSL_SUCCESS,
     ERROR_LIBSSL_FAILURE,
-    "the hash function failed");
+    "the hash function failed",
+    rc,cleanup);
   
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (InitByteBuff(key,
@@ -435,6 +436,7 @@ int pkcs5_keyed_hash_bytebuff(
 
 cleanup:
 
+  ERR_print_errors_fp(stderr);
   if (master_str){ 
     OPENSSL_cleanse(master_str,master_size);
     free(master_str);
@@ -539,7 +541,7 @@ int pkcs5_keyed_hash_HashingField(
                              ,iters)
    ),
 
-    LIBSSL_SUCCESS,
+    ERROR_SUCCESS,
     ERROR_HASHBYTEBUFF_FAILED,
     "hasing byte buffer failed");
   

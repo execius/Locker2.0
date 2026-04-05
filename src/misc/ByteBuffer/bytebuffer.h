@@ -54,4 +54,5 @@ enum ByteBuffErrors {
   ERROR_DESERIALIZATION_FAILURE = -6012
 };
 
+int printbb(ByteBuff_t *bb);
 #endif

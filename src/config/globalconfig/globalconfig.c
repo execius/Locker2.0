@@ -8,6 +8,7 @@ int InitGlobalConf(void){
   char *home = getenv("HOME");
   ERROR_CHECK_NULL_LOG(home,ERROR_NULL_VALUE_GIVEN,"could not fetch $HOME");
 
+
   MALLOC_CHECK_NULL_LOG(globalconf,
       sizeof(GlobalConf_t),
       ERROR_MEMORY_ALLOCATION,
@@ -52,11 +53,17 @@ int InitGlobalConf(void){
       ERROR_SUCCESS,
       ERROR_APPENDSTRBUFF_FAILED,
       "failed to append '/backup' while building backup db dir path");
-
+    ERROR_CHECK_SUCCESS_LOG(
+      (open_master_db()
+      ),
+      ERROR_SUCCESS,
+      ERROR_APPENDSTRBUFF_FAILED,
+      "failed to append '/backup' while building backup db dir path");
 
   globalconf->version = CECRET_VERSION;
   globalconf->key_derivation_iters = CECRET_KDF_ITR;
   globalconf->password_hashing_iters = CECRET_PASSWORD_HASH_IT;
+  globalconf->lookup_hash_iters = CECRET_LOOKUP_HASH_IT;
   return ERROR_SUCCESS;
 
 }
@@ -64,6 +71,7 @@ int InitGlobalConf(void){
 int DestroyGlobalConf(void){
   ERROR_CHECK_NULL_LOG(globalconf,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
 
+  CloseDb(globalconf->master);
   if (globalconf->master_db_dir_path) 
     DestroyByteBuff_Secure(globalconf->master_db_dir_path);
   if (globalconf->backup_dir_path) 

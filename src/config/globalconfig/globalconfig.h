@@ -12,6 +12,7 @@ typedef struct GlobalConf_s {
   ByteBuff_t *master_db_dir_path;
   ByteBuff_t *backup_dir_path;
 
+  sqlite3 *master;
   uint32_t key_derivation_iters;  
   uint32_t lookup_hash_iters;  
   uint32_t password_hashing_iters;
@@ -19,5 +20,6 @@ typedef struct GlobalConf_s {
 extern GlobalConf_t *globalconf;
 
 int InitGlobalConf(void);
+int DestroyGlobalConf(void);
 
 #endif /* ifdef GLOBALCONF_H */

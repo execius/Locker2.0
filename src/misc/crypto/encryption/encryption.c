@@ -483,7 +483,7 @@ int encrypt(const EVP_CIPHER *type,
   cipher_max = plain_size +block_size;
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
   (*cipher_size > cipher_max),
-    1,
+    0,
     ERROR_BUF_OVERFLOW,
     "cipher buffer overflowed",
     rc,cleanup);
@@ -539,26 +539,29 @@ int EncryptByteBuff(
   unsigned char *tag_str = NULL;
   int plain_size = 0;
   int cipher_size = 0;
-  int key_size = 0;
-  int iv_size = 0;
+  size_t key_size = 0;
+  size_t iv_size = 0;
   int cipher_max = 0;
   int rc = 0;
+
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (GetLenByteBuff(key
-                       ,(size_t *)&key_size)
+                       ,&key_size)
       ),
       ERROR_SUCCESS,
       ERROR_GETLEN_FAILURE,
       "failed to get key len from byte buff",
       rc,cleanup);
+
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (GetLenByteBuff(iv
-                       ,(size_t *)&iv_size)
+                       ,&iv_size)
       ),
       ERROR_SUCCESS,
       ERROR_GETLEN_FAILURE,
       "failed to get iv len from byte buff",
       rc,cleanup);
+
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (!(key_size == EVP_CIPHER_key_length(type))),
       0,
@@ -806,7 +809,7 @@ int decrypt(const EVP_CIPHER *type,
   plain_max = cipher_size ;
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
   (*plain_size > plain_max),
-    1,
+    0,
     ERROR_BUF_OVERFLOW,
     "plain buffer overflowed",
     rc,cleanup);

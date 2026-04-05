@@ -3,24 +3,29 @@
 #include "includes.h" 
 
 
-typedef struct EncryptedAccount_s EncryptedAccount_t;
 typedef struct Account_s Account_t;
 
-#include "encryption.h"
-#include "hashing.h"
 #include "bytebuffer.h" 
 #include "user.h" 
 
 int DestroyAccount(Account_t *account);
 
-int CreateAccount(Account_t **account
+/*the value returned in the second argument is caller owned 
+ * and is to be passed to DestroyAccount after usage , 
+ * otherwise SENSITIVE DATA WILL LEAK INTO MEMORY
+ * */
+int InitAccount(Account_t **account 
     ,const ByteBuff_t *username
     ,const ByteBuff_t *password
     ,const ByteBuff_t *email
     ,const ByteBuff_t *platform
-    ,const ByteBuff_t *note
-    ,user_t *user);
+    ,const ByteBuff_t *note);
 
+/*the values returned in the second arguments are caller owned
+ * this is SENSITIVE information , please do not free and pass 
+ * them to DestroyByteBuff_Secure for secure wiping and memory 
+ * release
+ * */
 int AccountGetUsername(const Account_t *account,ByteBuff_t **username);
 int AccountGetPassword(const Account_t *account,ByteBuff_t **password);
 int AccountGetEmail(const Account_t *account,ByteBuff_t **email);
@@ -28,30 +33,15 @@ int AccountGetPlatform(const Account_t *account,ByteBuff_t **platform);
 int AccountGetNote(const Account_t *account,ByteBuff_t **note);
 
 
-int DestroyEncryptedAccount(EncryptedAccount_t *account);
+int InsertAccount(user_t *user
+    ,Account_t *acc);
 
-int EncryptedAccountGetUsernameHash(const EncryptedAccount_t *eac,
-    ByteBuff_t **username_hash);
-int EncryptedAccountGetPlatformHash(const EncryptedAccount_t *eac,
-    ByteBuff_t **platform_hash);
-int EncryptedAccountGetEmailHash(const EncryptedAccount_t *eac,
-    ByteBuff_t **email_hash);
-
-
-int EncryptAccount(Account_t *account
-    ,EncryptedAccount_t **eac
-    ,user_t *user);
-
-int DecryptAccount(EncryptedAccount_t *eac
-    ,Account_t **account
-    ,user_t *user);
+int FetchAccount(user_t *user
+    ,Account_t **acc 
+    ,uint64_t id);
 enum AccErrors
 { 
-  ERROR_ACCOUNT_INNIT_FAILURE = -9000,
-  ERROR_ENCACCOUNT_INNIT_FAILURE = -9001,
-  ERROR_ENCACCOUNT_FAILURE = -9002,
-  ERROR_FETCHENCACC_FAILURE = -9003,
-  ERROR_DECACCOUNT_FAILURE = -9004
+  ERROR_ACCOUNT_INIT_FAILURE = -9000,
+  ERROR_ACCOUNT_DECRYPT_FAILURE = -9004,
 };
-
 #endif /* ifndef ACCOUNTS_H */
