@@ -45,6 +45,7 @@ int UserLoadFromDb(user_t **user
     ,ByteBuff_t *username
     ,ByteBuff_t *password);
 int UserOpenDb(user_t *user,sqlite3 **userdb);
+int UserAuth(const user_t *user,const ByteBuff_t *password);
 
 enum  UserErrors
 { 
@@ -58,7 +59,8 @@ enum  UserErrors
   ERROR_USER_OPENDDB = -3007,
   ERROR_USER_INSRTDB = -3008,
   ERROR_USER_INSRTCONF = -3009,
-  ERROR_USER_MAKEDB = -3010
+  ERROR_USER_MAKEDB = -3010,
+  ERROR_USER_AUTH = -3011
 
 };
 

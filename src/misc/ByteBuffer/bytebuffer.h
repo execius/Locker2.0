@@ -37,6 +37,12 @@ int DeserializeByteBuff(ByteBuff_t **bytebuff,
     const unsigned char *in,
     size_t in_size);
 
+
+/*use the _secure version for any cryptographic secrets , the other is 
+ * prone to timing attacks*/
+int CmpByteBuff_Secure(ByteBuff_t *first,const ByteBuff_t *second,size_t len);
+int CmpByteBuff(ByteBuff_t *first,const ByteBuff_t *second,size_t len);
+int AccessPathByteBuff(const ByteBuff_t *path);
 enum ByteBuffErrors {
   ERROR_BUFFDUP_FAILURE = -6000,
   ERROR_BUFFINIT_FAILURE = -6001,
@@ -51,7 +57,9 @@ enum ByteBuffErrors {
   ERROR_LEN_VAR_INVALID = -6009,
   ERROR_SERIALIZED_DATA_CORRUPTION = -6010,
   ERROR_SERIALIZATION_FAILURE = -6011,
-  ERROR_DESERIALIZATION_FAILURE = -6012
+  ERROR_DESERIALIZATION_FAILURE = -6012,
+  ERROR_BYTEBUFF_ACCESSPATH_FAILURE = -6013,
+  ERROR_BYTEBUFF_CMP_UNEQUAL = -6014
 };
 
 int printbb(ByteBuff_t *bb);

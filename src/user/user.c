@@ -336,6 +336,65 @@ int UserGetUserConf(const user_t *user,UserConfig_t **userconf){
       sizeof(UserConfig_t));
   return ERROR_SUCCESS;
 }
+
+
+int UserAuth(const user_t *user,const ByteBuff_t *password)
+{
+  ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  ERROR_CHECK_NULL_LOG(password,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
+  int rc = 0 ;
+  const UserConfig_t *userconfig = &user->userconf;
+  size_t hash_size = EVP_MD_size(
+                               hashing_options_fetchers[userconfig->hashing_option_idx]());
+  ByteBuff_t *hashed_pass_input = NULL,
+             *hashed_pass_user = NULL,
+             *salt = NULL;
+  ERROR_CHECK_SUCCESS_LOG(
+      (HashingFieldGetSalt(user->hashed_pass,&salt)),
+      ERROR_SUCCESS,
+      ERROR_HASHINGFIELD_GETSALT_FAILURE,
+      "failed to get salt buff for auth ");
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (HashingFieldGetText(user->hashed_pass,&hashed_pass_user)),
+      ERROR_SUCCESS,
+      ERROR_HASHINGFIELD_GETTEXT_FAILURE,
+      "failed to get hashed pass text for auth ",
+      rc,cleanup);
+
+    ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+  (pkcs5_keyed_hash_bytebuff( password
+                             ,&hashed_pass_input
+                             ,hash_size
+                             ,salt
+                             ,hashing_options_fetchers[userconfig->hashing_option_idx]()
+                             ,globalconf->password_hashing_iters)
+   ),
+
+    ERROR_SUCCESS,
+    ERROR_HASHBYTEBUFF_FAILED,
+    "hasing password byte buffer failed",
+    rc,cleanup);
+
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (CmpByteBuff_Secure(hashed_pass_user
+                          ,hashed_pass_input
+                          ,hash_size)
+       ),
+      ERROR_SUCCESS,
+      ERROR_USER_AUTH,
+      "auth failed",
+      rc,cleanup);
+
+  rc = ERROR_SUCCESS;
+  goto cleanup;
+cleanup:
+  DestroyByteBuff_Secure(hashed_pass_input);
+  DestroyByteBuff_Secure(hashed_pass_user);
+  DestroyByteBuff_Secure(salt);
+  return rc;
+}
+
 int UserOpenDb(user_t *user,sqlite3 **userdb)
 {
   ERROR_CHECK_NULL_LOG(user,ERROR_NULL_VALUE_GIVEN,"NULL parameter");
@@ -359,7 +418,7 @@ int UserMakeDb(user_t *user)
   int rc = 0 ;
 
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
-      (make_user_db(user->user_db_path)
+      (init_user_db(user->user_db_path)
        ),
       ERROR_SUCCESS,
       ERROR_USER_MAKEDB,
@@ -398,7 +457,7 @@ int UserInsertConfig(user_t *user)
   ERROR_CHECK_SUCCESS_LOG(
       (HashingFieldGetSalt(user->key,&key_derivation_salt)),
       ERROR_SUCCESS,
-      ERROR_HASHINGFIELD_GETTEXT_FAILURE,
+      ERROR_HASHINGFIELD_GETSALT_FAILURE,
       "failed to get key_derivation_salt buff");
 
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
@@ -553,7 +612,6 @@ int UserLoadFromDb(user_t **user,ByteBuff_t *username,ByteBuff_t *password)
       "failed to create password_key hashing field",
       rc,cleanup);
 
-  printf("%d\n",globalconf->key_derivation_iters);
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
     (pkcs5_keyed_hash_HashingField(
       password_key_hf,

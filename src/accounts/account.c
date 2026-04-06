@@ -1020,3 +1020,21 @@ cleanup:
 
 
 
+// debug
+int printacc(Account_t *acc) 
+{
+
+  printf("\n");
+  printbb(acc->username);
+  printf("\n");
+  printbb(acc->email);
+  printf("\n");
+  printbb(acc->password);
+  printf("\n");
+  printbb(acc->platform);
+  printf("\n");
+  printbb(acc->note);
+  printf("\n");
+  return ERROR_SUCCESS;
+}
+

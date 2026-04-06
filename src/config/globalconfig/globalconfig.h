@@ -1,6 +1,7 @@
 #ifndef GLOBALCONF_H
 #define GLOBALCONF_H
 
+#include "includes.h" 
 #include "encryption.h" 
 #include "hashing.h" 
 #include "bytebuffer.h" 
@@ -19,7 +20,7 @@ typedef struct GlobalConf_s {
 }GlobalConf_t ;
 extern GlobalConf_t *globalconf;
 
-int InitGlobalConf(void);
-int DestroyGlobalConf(void);
+int InitGlobal(ByteBuff_t *cecretroot);
+int DestroyGlobal(void);
 
 #endif /* ifdef GLOBALCONF_H */

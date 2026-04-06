@@ -44,4 +44,5 @@ enum AccErrors
   ERROR_ACCOUNT_INIT_FAILURE = -9000,
   ERROR_ACCOUNT_DECRYPT_FAILURE = -9004,
 };
+int printacc(Account_t *acc) ;
 #endif /* ifndef ACCOUNTS_H */

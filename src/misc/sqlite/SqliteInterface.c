@@ -157,7 +157,7 @@ cleanup:
   return rc;
 
 }
-int make_master_db(void){
+int init_master_db(void){
   char *err = NULL;
   ByteBuff_t *master_db_filepath = NULL;
   int rc = 0;
@@ -200,12 +200,13 @@ int make_master_db(void){
 
   rc = ERROR_SUCCESS;
 cleanup:
+  if (globalconf->master) CloseDb(globalconf->master);
   if (master_db_filepath) DestroyByteBuff_Secure(master_db_filepath);
   if (err) free(err);
   return rc;
 
 }
-int make_user_db(ByteBuff_t *user_db_filepath){
+int init_user_db(ByteBuff_t *user_db_filepath){
 
   ERROR_CHECK_NULL_LOG(user_db_filepath,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   char *err = NULL  ;

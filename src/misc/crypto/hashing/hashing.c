@@ -358,8 +358,8 @@ int pkcs5_keyed_hash_bytebuff(
   unsigned char *master_str = NULL;
   unsigned char *salt_str = NULL;
   unsigned char *key_str = NULL;
-  int master_size = 0;
-  int salt_size = 0;
+  size_t master_size = 0;
+  size_t salt_size = 0;
   int rc = 0;
 
   MALLOC_CHECK_NULL_LOG(key_str,
@@ -369,7 +369,7 @@ int pkcs5_keyed_hash_bytebuff(
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (
        GetLenByteBuff(master
-         ,(size_t *) &master_size)
+         , &master_size)
       ),
       ERROR_SUCCESS,
       ERROR_GETLEN_FAILURE,
@@ -379,7 +379,7 @@ int pkcs5_keyed_hash_bytebuff(
   ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
       (
        GetLenByteBuff(salt
-         ,(size_t *) &salt_size)
+         , &salt_size)
       ),
       ERROR_SUCCESS,
       ERROR_GETLEN_FAILURE,
@@ -436,7 +436,6 @@ int pkcs5_keyed_hash_bytebuff(
 
 cleanup:
 
-  ERR_print_errors_fp(stderr);
   if (master_str){ 
     OPENSSL_cleanse(master_str,master_size);
     free(master_str);

@@ -10,11 +10,11 @@ int InitByteBuff(ByteBuff_t **bytebuff,const unsigned char *buff,size_t len){
   ERROR_CHECK_NULL_LOG(bytebuff,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   ERROR_CHECK_NULL_LOG(buff,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   int rc = 0;
-  // ERROR_CHECK_SUCCESS_LOG(
-  //     (len < 1 || len > SIZE_MAX),
-  //     1,
-  //     ERROR_LEN_VAR_INVALID,
-  //     "lenght is invalid");
+  ERROR_CHECK_SUCCESS_LOG(
+      (len < 0 || len >  SIZE_MAX),
+      0,
+      ERROR_LEN_VAR_INVALID,
+      "lenght is invalid");
 
   MALLOC_CHECK_NULL_LOG(*bytebuff,
       sizeof(ByteBuff_t),
@@ -76,6 +76,47 @@ int DupByteBuff(ByteBuff_t **dst,const ByteBuff_t *src){
   return ERROR_SUCCESS;
 }
 
+int CmpByteBuff(ByteBuff_t *first,const ByteBuff_t *second,size_t len){
+  ERROR_CHECK_NULL_LOG(first,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(first->buff,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(second,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(second->buff,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_SUCCESS_LOG(
+    (len == 0),
+    0,
+    ERROR_LEN_VAR_INVALID,
+    "length must be > 0");
+
+  ERROR_CHECK_SUCCESS_LOG(
+      (len > first->len || len > second->len),
+      0,
+      ERROR_LEN_VAR_INVALID,
+      "lenght is larger than compared buffer size");
+  ERROR_CHECK_SUCCESS_LOG(
+      (0 != memcmp(first->buff,second->buff,len)),
+      0,
+      ERROR_BYTEBUFF_CMP_UNEQUAL,
+      "note equal");
+  return ERROR_SUCCESS;
+}
+int CmpByteBuff_Secure(ByteBuff_t *first,const ByteBuff_t *second,size_t len){
+  ERROR_CHECK_NULL_LOG(first,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(first->buff,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(second,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  ERROR_CHECK_NULL_LOG(second->buff,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+
+  ERROR_CHECK_SUCCESS_LOG(
+      (len > first->len || len > second->len),
+      0,
+      ERROR_LEN_VAR_INVALID,
+      "lenght is larger than compared buffer size");
+  ERROR_CHECK_SUCCESS_LOG(
+      (0 != CRYPTO_memcmp(first->buff,second->buff,len)),
+      0,
+      ERROR_BYTEBUFF_CMP_UNEQUAL,
+      "not equal");
+  return ERROR_SUCCESS;
+}
 int GetBuffByteBuff(const ByteBuff_t *bytebuff,unsigned char **buff){
   ERROR_CHECK_NULL_LOG(bytebuff,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
   ERROR_CHECK_NULL_LOG(buff,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
@@ -188,5 +229,40 @@ int DeserializeByteBuff(ByteBuff_t **bytebuff,
       ERROR_SUCCESS,
       ERROR_BUFFINIT_FAILURE,
       "failed to inittialize user");
+  return ERROR_SUCCESS;
+}
+
+
+int AccessPathByteBuff(const ByteBuff_t *path)
+{
+
+  ERROR_CHECK_NULL_LOG(path,ERROR_NULL_VALUE_GIVEN,"null value in parameter");
+  int rc = 0 ;
+  char *path_null_term = NULL;
+
+  ERROR_CHECK_SUCCESS_LOG(
+      (GetBuffByteBuff_NullTerminated(path
+                                      ,(unsigned char **)&path_null_term)
+      ),
+      ERROR_SUCCESS,
+      ERROR_GETBUFF_NL_FAILURE,
+      "failed to get  path null terminated str from byte buff");
+  ERROR_CHECK_SUCCESS_SET_RC_GOTO_LOG(
+      (access(path_null_term, F_OK)),
+      ERROR_SUCCESS,
+      ERROR_BYTEBUFF_ACCESSPATH_FAILURE,
+      "failed to accesspath",
+      rc,cleanup);
+cleanup:
+    if (path_null_term) {
+      OPENSSL_cleanse(path_null_term,path->len);
+      free(path_null_term);
+    } 
+  return rc;
+}
+//debug
+int printbb(ByteBuff_t *bb)
+{
+  write(1,bb->buff,bb->len);
   return ERROR_SUCCESS;
 }

@@ -8,8 +8,8 @@
 int OpenDb(sqlite3 **db,const ByteBuff_t *path);
 int CloseDb(sqlite3 *db);
 int open_master_db(void);
-int make_master_db(void);
-int make_user_db(ByteBuff_t *user_db_filepath);
+int init_master_db(void);
+int init_user_db(ByteBuff_t *user_db_filepath);
 enum SqliteInterErrors{
   ERROR_CANNOT_OPEN_DB = -4000,
   ERROR_SQLITE_FAILURE = -4001,

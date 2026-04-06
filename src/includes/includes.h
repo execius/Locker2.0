@@ -8,6 +8,9 @@
 #include <termios.h>
 #include <b64/cencode.h>
 #include <bsd/string.h>
+#include <sys/prctl.h>
+#include <sys/mman.h>
+#include <sys/resource.h>
 #include <ctype.h>
 #include <math.h>
 #include <openssl/err.h>
